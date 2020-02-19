@@ -1,6 +1,7 @@
 local unitscan = CreateFrame'Frame'
 local forbidden
 local found = {}
+local dead = {}
 
 local MSG_PREFIX = 'unitscan'
 
@@ -11,28 +12,35 @@ unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
   elseif event == 'ADDON_ACTION_FORBIDDEN' and arg1 == 'unitscan' then
     forbidden = true
   elseif event == 'PLAYER_TARGET_CHANGED' then
-    if UnitName'target' and unitscan.button ~= nil and
-      strupper(UnitName'target') == unitscan.button:GetText() and
-      not GetRaidTargetIndex'target' and
+    if UnitName'target' and strupper(UnitName'target') ==
+      unitscan.button:GetText() and not GetRaidTargetIndex'target' and
       (not IsInRaid() or UnitIsGroupAssistant'player' or
         UnitIsGroupLeader'player') then SetRaidTarget('target', 4) end
   elseif event == 'CHAT_MSG_ADDON' and arg1 == MSG_PREFIX then
     local name = arg2
 
+    -- dbg
+    -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
+
+    if string.find(name, "dead:", 1) then
+      dead[string.gsub(name, 'dead:', '')] = true
+      return
+    end
+
     if arg3 == "RAID" or arg3 == "PARTY" then
+      unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
+
       if IsInGuild() then
         ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "GUILD")
       else
         found[name] = true
         unitscan.discovered_unit = name
-        unitscan.play_sound()
+        unitscan.play_sound(600)
       end
     elseif arg3 == "GUILD" then -- if (sender ~= nil and sender:find("^" .. UnitName("player"))) then
-      unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
-
       found[name] = true
       unitscan.discovered_unit = name
-      unitscan.play_sound()
+      unitscan.play_sound(600)
     end
   end
 end)
@@ -44,6 +52,7 @@ unitscan:RegisterEvent 'CHAT_MSG_ADDON'
 local BROWN = {.7, .15, .05}
 local YELLOW = {1, 1, .15}
 local CHECK_INTERVAL = .1
+local DEAD_INTERVAL = 5
 
 unitscan_targets = {}
 
@@ -56,8 +65,8 @@ end
 do
   local last_played
 
-  function unitscan.play_sound()
-    if not last_played or GetTime() - last_played > 10 then
+  function unitscan.play_sound(timeout)
+    if not last_played or GetTime() - last_played >= (timeout or 10) then
       unitscan.flash.animation:Play()
       PlaySoundFile([[Interface\AddOns\unitscan\Event_wardrum_ogre.ogg]],
                     'Master')
@@ -74,13 +83,13 @@ function unitscan.target(name)
   TargetUnit(name, true)
   SetCVar('Sound_EnableAllSound', sound_setting)
   if forbidden then
-    if not found[name] then
+    if not found[name] and not dead[name] then
       found[name] = true
 
       unitscan.discovered_unit = name
       unitscan.play_sound()
 
-      if (name == "LORD KAZZAK" or name == "AZUREGOS" or name == "DEBUGGER") then
+      if (name == "LORD KAZZAK" or name == "AZUREGOS") then
         if (IsInGroup()) then
           ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "RAID")
         else
@@ -307,10 +316,22 @@ end
 
 do
   unitscan.last_check = GetTime()
+  unitscan.last_dead = GetTime()
   function unitscan.UPDATE()
     if unitscan.discovered_unit and not InCombatLockdown() then
       unitscan.button:set_target(unitscan.discovered_unit)
       unitscan.discovered_unit = nil
+    end
+    if (GetTime() - unitscan.last_dead) >= DEAD_INTERVAL then
+      unitscan.last_dead = GetTime()
+      local unitName = UnitName('target')
+
+      if (unitName == "Azuregos" or unitName == "Lord Kazzak") and
+        not dead[unitName] and UnitIsDead("target") then
+        dead[unitName] = true
+        ChatThrottleLib:SendAddonMessage("NORMAL", MSG_PREFIX,
+                                         "dead:" .. unitName, "GUILD")
+      end
     end
     if GetTime() - unitscan.last_check >= CHECK_INTERVAL then
       unitscan.last_check = GetTime()
