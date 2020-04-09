@@ -1,7 +1,6 @@
 local unitscan = CreateFrame'Frame'
 local forbidden
 local found = {}
-local dead = {}
 
 local MSG_PREFIX = 'unitscan'
 
@@ -21,11 +20,6 @@ unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
 
     -- dbg
     -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
-
-    if string.find(name, "dead:", 1) then
-      dead[string.gsub(name, 'dead:', '')] = true
-      return
-    end
 
     if arg3 == "RAID" or arg3 == "PARTY" then
       unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
@@ -52,7 +46,6 @@ unitscan:RegisterEvent 'CHAT_MSG_ADDON'
 local BROWN = {.7, .15, .05}
 local YELLOW = {1, 1, .15}
 local CHECK_INTERVAL = .1
-local DEAD_INTERVAL = 5
 
 unitscan_targets = {}
 
@@ -83,7 +76,7 @@ function unitscan.target(name)
   TargetUnit(name, true)
   SetCVar('Sound_EnableAllSound', sound_setting)
   if forbidden then
-    if not found[name] and not dead[name] then
+    if not found[name] then
       found[name] = true
 
       unitscan.discovered_unit = name
@@ -103,6 +96,10 @@ function unitscan.target(name)
   else
     found[name] = false
   end
+end
+
+function unitscan.is_worldboss(target)
+  return target == "LORD KAZZAK" or target == "AZUREGOS" or target == "LETHON" or target == "EMERISS" or target == "TAERAR" or name == "YSONDRE"
 end
 
 function unitscan.LOAD()
@@ -316,23 +313,12 @@ end
 
 do
   unitscan.last_check = GetTime()
-  unitscan.last_dead = GetTime()
   function unitscan.UPDATE()
     if unitscan.discovered_unit and not InCombatLockdown() then
       unitscan.button:set_target(unitscan.discovered_unit)
       unitscan.discovered_unit = nil
     end
-    if (GetTime() - unitscan.last_dead) >= DEAD_INTERVAL then
-      unitscan.last_dead = GetTime()
-      local unitName = UnitName('target')
-
-      if (unitName == "Azuregos" or unitName == "Lord Kazzak") and
-        not dead[unitName] and UnitIsDead("target") then
-        dead[unitName] = true
-        ChatThrottleLib:SendAddonMessage("NORMAL", MSG_PREFIX,
-                                         "dead:" .. unitName, "GUILD")
-      end
-    end
+    
     if GetTime() - unitscan.last_check >= CHECK_INTERVAL then
       unitscan.last_check = GetTime()
       for name in pairs(unitscan_targets) do unitscan.target(name) end
