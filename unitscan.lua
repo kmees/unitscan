@@ -2,7 +2,8 @@ local unitscan = CreateFrame'Frame'
 local forbidden
 local found = {}
 
-local MSG_PREFIX = 'unitscan'
+local MSG_PREFIX = 'unitscan_dbg'
+-- local MSG_PREFIX = 'unitscan'
 
 unitscan:SetScript('OnUpdate', function() unitscan.UPDATE() end)
 unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
@@ -69,6 +70,25 @@ do
   end
 end
 
+function unitscan.strsplit(delimiter, text)
+  local list = {}
+  local pos = 1
+  if strfind("", delimiter, 1) then -- this would result in endless loops
+     error("delimiter matches empty string!")
+  end
+  while 1 do
+     local first, last = strfind(text, delimiter, pos)
+     if first then -- found?
+        tinsert(list, strsub(text, pos, first-1))
+        pos = last+1
+     else
+        tinsert(list, strsub(text, pos))
+        break
+     end
+  end
+  return list
+end
+
 function unitscan.target(name)
   forbidden = false
   local sound_setting = GetCVar'Sound_EnableAllSound'
@@ -77,29 +97,34 @@ function unitscan.target(name)
   SetCVar('Sound_EnableAllSound', sound_setting)
   if forbidden then
     if not found[name] then
-      found[name] = true
+      local zone = GetZoneText()
+
+      found[name] = zone
 
       unitscan.discovered_unit = name
       unitscan.play_sound()
 
-      if (name == "LORD KAZZAK" or name == "AZUREGOS") then
+      if (unitscan.is_worldboss(name)) then
+        local msg = name .. ',' .. zone
         if (IsInGroup()) then
-          ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "RAID")
+          ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, msg, "RAID")
         else
-          ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "GUILD")
+          ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, msg, "GUILD")
         end
-        -- else
-        -- 	unitscan.play_sound()
-        -- 	unitscan.discovered_unit = name
+        SendChatMessage(name .. ' spawned in ' .. zone, "GUILD")
       end
     end
   else
-    found[name] = false
+    found[name] = nil
   end
 end
 
 function unitscan.is_worldboss(target)
-  return target == "LORD KAZZAK" or target == "AZUREGOS" or target == "LETHON" or target == "EMERISS" or target == "TAERAR" or name == "YSONDRE"
+  if MSG_PREFIX == "unitscan_dbg" and target == "DEBUGGER" then
+    return true
+  end
+
+  return target == "LORD KAZZAK" or target == "AZUREGOS" or target == "LETHON" or target == "EMERISS" or target == "TAERAR" or target == "YSONDRE"
 end
 
 function unitscan.LOAD()
@@ -151,9 +176,9 @@ function unitscan.LOAD()
 
   local button = CreateFrame('Button', 'unitscan_button', UIParent,
                              'SecureActionButtonTemplate')
+  unitscan.button = button
   button:SetAttribute('type', 'macro')
   button:Hide()
-  unitscan.button = button
   button:SetPoint('BOTTOM', UIParent, 0, 128)
   button:SetWidth(150)
   button:SetHeight(42)
@@ -185,6 +210,7 @@ function unitscan.LOAD()
   button:SetScript('OnLeave', function(self)
     self:SetBackdropBorderColor(unpack(BROWN))
   end)
+  
   function button:set_target(name)
     self:SetText(name)
     self:SetAttribute('macrotext', '/cleartarget\n/targetexact ' .. name)
@@ -192,6 +218,7 @@ function unitscan.LOAD()
     self.glow.animation:Play()
     self.shine.animation:Play()
   end
+  
 
   do
     local background = button:GetNormalTexture()
@@ -201,7 +228,7 @@ function unitscan.LOAD()
     background:SetPoint('TOPRIGHT', -3, -3)
     background:SetTexCoord(0, 1, 0, .25)
   end
-
+  
   do
     local title_background = button:CreateTexture(nil, 'BORDER')
     title_background:SetTexture [[Interface\AddOns\unitscan\UI-Achievement-Title]]
@@ -223,7 +250,10 @@ function unitscan.LOAD()
     subtitle:SetPoint('TOPLEFT', title, 'BOTTOMLEFT', 0, -4)
     subtitle:SetPoint('RIGHT', title)
     subtitle:SetText 'Unit Found!'
+
+    unitscan.zone_text = subtitle
   end
+
 
   do
     local model = CreateFrame('PlayerModel', nil, button)
@@ -316,6 +346,7 @@ do
   function unitscan.UPDATE()
     if unitscan.discovered_unit and not InCombatLockdown() then
       unitscan.button:set_target(unitscan.discovered_unit)
+      unitscan.zone_text:SetText(found[unitscan.discovered_unit])
       unitscan.discovered_unit = nil
     end
     
