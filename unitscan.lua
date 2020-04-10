@@ -5,6 +5,8 @@ local found = {}
 local MSG_PREFIX = 'unitscan_dbg'
 -- local MSG_PREFIX = 'unitscan'
 
+local debug = MSG_PREFIX == 'unitscan_dbg'
+
 unitscan:SetScript('OnUpdate', function() unitscan.UPDATE() end)
 unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
   if event == 'ADDON_LOADED' and arg1 == 'unitscan' then
@@ -13,29 +15,26 @@ unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
     forbidden = true
   elseif event == 'PLAYER_TARGET_CHANGED' then
     if UnitName'target' and strupper(UnitName'target') ==
-      unitscan.button:GetText() and not GetRaidTargetIndex'target' and
+      unitscan.uiButton:GetText() and not GetRaidTargetIndex'target' and
       (not IsInRaid() or UnitIsGroupAssistant'player' or
         UnitIsGroupLeader'player') then SetRaidTarget('target', 4) end
   elseif event == 'CHAT_MSG_ADDON' and arg1 == MSG_PREFIX then
-    local name = arg2
+    unitscan.print(arg2)
+    local name, zone = strsplit(',', arg2)
 
     -- dbg
     -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
 
     if arg3 == "RAID" or arg3 == "PARTY" then
-      unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
+      -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
 
       if IsInGuild() then
         ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "GUILD")
       else
-        found[name] = true
-        unitscan.discovered_unit = name
-        unitscan.play_sound(600)
+        unitscan.trigger(name, zone)
       end
     elseif arg3 == "GUILD" then -- if (sender ~= nil and sender:find("^" .. UnitName("player"))) then
-      found[name] = true
-      unitscan.discovered_unit = name
-      unitscan.play_sound(600)
+      unitscan.trigger(name, zone)
     end
   end
 end)
@@ -58,9 +57,21 @@ end
 
 do
   local last_played
+  local last_triggered
 
-  function unitscan.play_sound(timeout)
-    if not last_played or GetTime() - last_played >= (timeout or 10) then
+  function unitscan.trigger(name, zone)
+    if not found[name] or not last_triggered or GetTime() - last_triggered >= 600 then
+      found[name] = zone or true
+
+      unitscan.discovered_unit = name
+      unitscan.play_sound()
+
+      last_triggered = GetTime()
+    end
+  end
+
+  function unitscan.play_sound()
+    if not last_played or GetTime() - last_played >= 6 then
       unitscan.flash.animation:Play()
       PlaySoundFile([[Interface\AddOns\unitscan\Event_wardrum_ogre.ogg]],
                     'Master')
@@ -68,25 +79,6 @@ do
       last_played = GetTime()
     end
   end
-end
-
-function unitscan.strsplit(delimiter, text)
-  local list = {}
-  local pos = 1
-  if strfind("", delimiter, 1) then -- this would result in endless loops
-     error("delimiter matches empty string!")
-  end
-  while 1 do
-     local first, last = strfind(text, delimiter, pos)
-     if first then -- found?
-        tinsert(list, strsub(text, pos, first-1))
-        pos = last+1
-     else
-        tinsert(list, strsub(text, pos))
-        break
-     end
-  end
-  return list
 end
 
 function unitscan.target(name)
@@ -111,7 +103,7 @@ function unitscan.target(name)
         else
           ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, msg, "GUILD")
         end
-        SendChatMessage(name .. ' spawned in ' .. zone, "GUILD")
+        -- SendChatMessage(name .. ' spawned in ' .. zone, "GUILD")
       end
     end
   else
@@ -120,7 +112,7 @@ function unitscan.target(name)
 end
 
 function unitscan.is_worldboss(target)
-  if MSG_PREFIX == "unitscan_dbg" and target == "DEBUGGER" then
+  if debug then
     return true
   end
 
@@ -176,7 +168,7 @@ function unitscan.LOAD()
 
   local button = CreateFrame('Button', 'unitscan_button', UIParent,
                              'SecureActionButtonTemplate')
-  unitscan.button = button
+  unitscan.uiButton = button
   button:SetAttribute('type', 'macro')
   button:Hide()
   button:SetPoint('BOTTOM', UIParent, 0, 128)
@@ -209,16 +201,7 @@ function unitscan.LOAD()
   end)
   button:SetScript('OnLeave', function(self)
     self:SetBackdropBorderColor(unpack(BROWN))
-  end)
-  
-  function button:set_target(name)
-    self:SetText(name)
-    self:SetAttribute('macrotext', '/cleartarget\n/targetexact ' .. name)
-    self:Show()
-    self.glow.animation:Play()
-    self.shine.animation:Play()
-  end
-  
+  end)  
 
   do
     local background = button:GetNormalTexture()
@@ -251,7 +234,7 @@ function unitscan.LOAD()
     subtitle:SetPoint('RIGHT', title)
     subtitle:SetText 'Unit Found!'
 
-    unitscan.zone_text = subtitle
+    unitscan.uiZone = subtitle
   end
 
 
@@ -341,12 +324,21 @@ function unitscan.LOAD()
   end
 end
 
+  
+function unitscan.set_target(name, zone)
+  unitscan.uiButton:SetText(name)
+  unitscan.uiButton:SetAttribute('macrotext', '/cleartarget\n/targetexact ' .. name)
+  unitscan.uiButton:Show()
+  unitscan.uiButton.glow.animation:Play()
+  unitscan.uiButton.shine.animation:Play()
+  unitscan.uiZone:SetText(zone or "Unit Found!")
+end
+
 do
   unitscan.last_check = GetTime()
   function unitscan.UPDATE()
     if unitscan.discovered_unit and not InCombatLockdown() then
-      unitscan.button:set_target(unitscan.discovered_unit)
-      unitscan.zone_text:SetText(found[unitscan.discovered_unit])
+      unitscan.set_target(unitscan.discovered_unit, found[unitscan.discovered_unit])
       unitscan.discovered_unit = nil
     end
     
@@ -361,6 +353,18 @@ function unitscan.print(msg)
   if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage(
       LIGHTYELLOW_FONT_COLOR_CODE .. '<unitscan> ' .. msg)
+  end
+end
+
+function unitscan.announce()
+  for name, zone in pairs(found) do
+    if (unitscan.is_worldboss(name) and zone and zone ~= true) then
+      if debug and false then 
+        unitscan.print(name .. ', ' .. zone)
+      else
+        ChatThrottleLib:SendChatMessage("ALERT", MSG_PREFIX, "<unitscan> " .. name .. " spawned in " .. zone, "GUILD")
+      end
+    end
   end
 end
 
@@ -389,6 +393,8 @@ function SlashCmdList.UNITSCAN(parameter)
 
   if name == '' then
     for _, key in ipairs(unitscan.sorted_targets()) do unitscan.print(key) end
+  elseif name == 'announce' then
+    unitscan.announce()
   else
     unitscan.toggle_target(name)
   end
