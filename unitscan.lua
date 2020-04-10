@@ -2,8 +2,8 @@ local unitscan = CreateFrame'Frame'
 local forbidden
 local found = {}
 
-local MSG_PREFIX = 'unitscan_dbg'
--- local MSG_PREFIX = 'unitscan'
+-- local MSG_PREFIX = 'unitscan_dbg'
+local MSG_PREFIX = 'unitscan'
 
 local debug = MSG_PREFIX == 'unitscan_dbg'
 
@@ -359,7 +359,7 @@ end
 function unitscan.announce()
   for name, zone in pairs(found) do
     if (unitscan.is_worldboss(name) and zone and zone ~= true) then
-      if debug and false then 
+      if debug then 
         unitscan.print(name .. ', ' .. zone)
       else
         ChatThrottleLib:SendChatMessage("ALERT", MSG_PREFIX, "<unitscan> " .. name .. " spawned in " .. zone, "GUILD")
