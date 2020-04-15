@@ -19,15 +19,9 @@ unitscan:SetScript('OnEvent', function(_, event, arg1, arg2, arg3, arg4)
       (not IsInRaid() or UnitIsGroupAssistant'player' or
         UnitIsGroupLeader'player') then SetRaidTarget('target', 4) end
   elseif event == 'CHAT_MSG_ADDON' and arg1 == MSG_PREFIX then
-    unitscan.print(arg2)
     local name, zone = strsplit(',', arg2)
 
-    -- dbg
-    -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
-
     if arg3 == "RAID" or arg3 == "PARTY" then
-      -- unitscan.print("Target: " .. name .. ", Sender: " .. arg4)
-
       if IsInGuild() then
         ChatThrottleLib:SendAddonMessage("ALERT", MSG_PREFIX, name, "GUILD")
       else
@@ -60,7 +54,8 @@ do
   local last_triggered
 
   function unitscan.trigger(name, zone)
-    if not found[name] or not last_triggered or GetTime() - last_triggered >= 600 then
+    if not found[name] or not last_triggered or GetTime() - last_triggered >=
+      600 then
       found[name] = zone or true
 
       unitscan.discovered_unit = name
@@ -112,11 +107,11 @@ function unitscan.target(name)
 end
 
 function unitscan.is_worldboss(target)
-  if debug then
-    return true
-  end
+  if debug then return true end
 
-  return target == "LORD KAZZAK" or target == "AZUREGOS" or target == "LETHON" or target == "EMERISS" or target == "TAERAR" or target == "YSONDRE"
+  return
+    target == "LORD KAZZAK" or target == "AZUREGOS" or target == "LETHON" or
+      target == "EMERISS" or target == "TAERAR" or target == "YSONDRE"
 end
 
 function unitscan.LOAD()
@@ -201,7 +196,7 @@ function unitscan.LOAD()
   end)
   button:SetScript('OnLeave', function(self)
     self:SetBackdropBorderColor(unpack(BROWN))
-  end)  
+  end)
 
   do
     local background = button:GetNormalTexture()
@@ -211,7 +206,7 @@ function unitscan.LOAD()
     background:SetPoint('TOPRIGHT', -3, -3)
     background:SetTexCoord(0, 1, 0, .25)
   end
-  
+
   do
     local title_background = button:CreateTexture(nil, 'BORDER')
     title_background:SetTexture [[Interface\AddOns\unitscan\UI-Achievement-Title]]
@@ -236,7 +231,6 @@ function unitscan.LOAD()
 
     unitscan.uiZone = subtitle
   end
-
 
   do
     local model = CreateFrame('PlayerModel', nil, button)
@@ -324,10 +318,10 @@ function unitscan.LOAD()
   end
 end
 
-  
 function unitscan.set_target(name, zone)
   unitscan.uiButton:SetText(name)
-  unitscan.uiButton:SetAttribute('macrotext', '/cleartarget\n/targetexact ' .. name)
+  unitscan.uiButton:SetAttribute('macrotext',
+                                 '/cleartarget\n/targetexact ' .. name)
   unitscan.uiButton:Show()
   unitscan.uiButton.glow.animation:Play()
   unitscan.uiButton.shine.animation:Play()
@@ -338,10 +332,11 @@ do
   unitscan.last_check = GetTime()
   function unitscan.UPDATE()
     if unitscan.discovered_unit and not InCombatLockdown() then
-      unitscan.set_target(unitscan.discovered_unit, found[unitscan.discovered_unit])
+      unitscan.set_target(unitscan.discovered_unit,
+                          found[unitscan.discovered_unit])
       unitscan.discovered_unit = nil
     end
-    
+
     if GetTime() - unitscan.last_check >= CHECK_INTERVAL then
       unitscan.last_check = GetTime()
       for name in pairs(unitscan_targets) do unitscan.target(name) end
@@ -349,6 +344,12 @@ do
   end
 end
 
+function unitscan.debug(msg)
+  if (DEFAULT_CHAT_FRAME and debug) then
+    DEFAULT_CHAT_FRAME:AddMessage(
+      LIGHTYELLOW_FONT_COLOR_CODE .. '<unitscan> ' .. msg)
+  end
+end
 function unitscan.print(msg)
   if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage(
@@ -359,11 +360,10 @@ end
 function unitscan.announce()
   for name, zone in pairs(found) do
     if (unitscan.is_worldboss(name) and zone and zone ~= true) then
-      if debug then 
-        unitscan.print(name .. ', ' .. zone)
-      else
-        ChatThrottleLib:SendChatMessage("ALERT", MSG_PREFIX, "<unitscan> " .. name .. " spawned in " .. zone, "GUILD")
-      end
+      unitscan.debug(name .. ', ' .. zone)
+      ChatThrottleLib:SendChatMessage("ALERT", MSG_PREFIX,
+                                      "<unitscan> " .. name .. " spawned in " ..
+                                        zone, "GUILD")
     end
   end
 end
